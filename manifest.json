@@ -1,0 +1,13 @@
+{
+  "name": "WARO URL to Figma",
+  "id": "waro-url-to-figma",
+  "api": "1.0.0",
+  "main": "dist/code.js",
+  "ui": "dist/ui.html",
+  "networkAccess": {
+    "allowedDomains": ["*"],
+    "reasoning": "Fetch HTML and assets from any URL provided by the user"
+  },
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page"
+}

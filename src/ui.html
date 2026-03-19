@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WARO URL to Figma</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Inter, -apple-system, sans-serif;
+      font-size: 12px;
+      background: #1e1e1e;
+      color: #e0e0e0;
+      padding: 16px;
+      width: 300px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .logo-icon {
+      width: 24px;
+      height: 24px;
+      background: linear-gradient(135deg, #9687F5, #7C3AED);
+      border-radius: 6px;
+    }
+
+    .logo h1 {
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .logo span {
+      font-size: 11px;
+      color: #888;
+    }
+
+    .field {
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: block;
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 6px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 8px 10px;
+      background: #2c2c2c;
+      border: 1px solid #3a3a3a;
+      border-radius: 6px;
+      color: #e0e0e0;
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input:focus, select:focus {
+      border-color: #9687F5;
+    }
+
+    input::placeholder {
+      color: #555;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 10px;
+      background: #7C3AED;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      margin-top: 4px;
+    }
+
+    .btn:hover { background: #6D28D9; }
+    .btn:disabled { background: #444; color: #888; cursor: not-allowed; }
+
+    .progress {
+      display: none;
+      margin-top: 12px;
+    }
+
+    .progress.visible { display: block; }
+
+    .progress-bar {
+      height: 3px;
+      background: #3a3a3a;
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: #9687F5;
+      border-radius: 2px;
+      transition: width 0.3s;
+      width: 0%;
+    }
+
+    .progress-text {
+      font-size: 11px;
+      color: #888;
+      text-align: center;
+    }
+
+    .error {
+      display: none;
+      background: #3a1a1a;
+      border: 1px solid #7f1d1d;
+      border-radius: 6px;
+      padding: 10px;
+      margin-top: 12px;
+      font-size: 11px;
+      color: #fca5a5;
+      line-height: 1.5;
+    }
+
+    .error.visible { display: block; }
+
+    .success {
+      display: none;
+      background: #1a3a2a;
+      border: 1px solid #166534;
+      border-radius: 6px;
+      padding: 10px;
+      margin-top: 12px;
+      font-size: 11px;
+      color: #86efac;
+      line-height: 1.5;
+    }
+
+    .success.visible { display: block; }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #2c2c2c;
+      margin: 14px 0;
+    }
+
+    .tip {
+      font-size: 10px;
+      color: #555;
+      line-height: 1.6;
+    }
+
+    .tip strong { color: #777; }
+  </style>
+</head>
+<body>
+  <div class="logo">
+    <div class="logo-icon"></div>
+    <div>
+      <h1>URL to Figma</h1>
+      <span>WARO Colombia</span>
+    </div>
+  </div>
+
+  <div class="field">
+    <label>URL de la página</label>
+    <input
+      type="url"
+      id="url-input"
+      placeholder="http://localhost:8888/organizadores"
+    />
+  </div>
+
+  <div class="field">
+    <label>Selector (opcional)</label>
+    <input
+      type="text"
+      id="selector-input"
+      placeholder="body, #main, .container"
+    />
+  </div>
+
+  <div class="field">
+    <label>Profundidad de capas</label>
+    <select id="depth-select">
+      <option value="3">Básica (más rápido)</option>
+      <option value="5" selected>Normal</option>
+      <option value="8">Detallada (más lento)</option>
+    </select>
+  </div>
+
+  <button class="btn" id="import-btn">Importar a Figma</button>
+
+  <div class="progress" id="progress">
+    <div class="progress-bar">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+    <div class="progress-text" id="progress-text">Iniciando...</div>
+  </div>
+
+  <div class="error" id="error-box"></div>
+  <div class="success" id="success-box"></div>
+
+  <hr class="divider" />
+
+  <p class="tip">
+    <strong>Ejemplos:</strong><br />
+    localhost:8888/organizadores<br />
+    localhost:8888/tickets<br />
+    <br />
+    <strong>Selector:</strong> deja vacío para importar toda la página, o usa un selector CSS para una sección específica.
+  </p>
+</body>
+</html>
