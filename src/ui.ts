@@ -35,7 +35,7 @@ function reset() {
   progressFill.style.width = '0%'
 }
 
-importBtn.addEventListener('click', async () => {
+importBtn.addEventListener('click', () => {
   const url = urlInput.value.trim()
 
   if (!url) {
@@ -43,75 +43,73 @@ importBtn.addEventListener('click', async () => {
     return
   }
 
-  // Add http:// if missing
   const fullUrl = url.startsWith('http') ? url : `http://${url}`
+  const selector = selectorInput.value.trim() || 'body'
+  const depth = parseInt(depthSelect.value)
 
   reset()
   importBtn.disabled = true
   setProgress(10, 'Conectando con la URL...')
 
-  try {
-    // Fetch the HTML
-    const res = await fetch(fullUrl)
-
-    if (!res.ok) {
-      throw new Error(`Error HTTP ${res.status}: ${res.statusText}`)
+  // Delegate fetch to plugin sandbox (figma.fetch — no CORS restrictions)
+  parent.postMessage({
+    pluginMessage: {
+      type: 'fetch-url',
+      url: fullUrl,
+      selector,
+      depth,
     }
-
-    setProgress(30, 'Procesando HTML...')
-    const html = await res.text()
-
-    setProgress(50, 'Extrayendo estilos y estructura...')
-
-    // Parse the DOM
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(html, 'text/html')
-
-    const selector = selectorInput.value.trim() || 'body'
-    const rootEl = doc.querySelector(selector)
-
-    if (!rootEl) {
-      throw new Error(`No se encontró el selector "${selector}" en la página.`)
-    }
-
-    const depth = parseInt(depthSelect.value)
-
-    setProgress(70, 'Construyendo estructura de capas...')
-
-    const tree = parseElement(rootEl as HTMLElement, depth, 0)
-
-    setProgress(90, 'Enviando a Figma...')
-
-    parent.postMessage({
-      pluginMessage: {
-        type: 'import-url',
-        url: fullUrl,
-        tree,
-        pageTitle: doc.title || new URL(fullUrl).pathname,
-      }
-    }, '*')
-
-  } catch (err: any) {
-    importBtn.disabled = false
-    progress.classList.remove('visible')
-
-    if (err.name === 'TypeError' && err.message.includes('fetch')) {
-      showError(`No se pudo conectar con la URL. Asegúrate de que la app esté corriendo y que la URL sea accesible.`)
-    } else {
-      showError(err.message || 'Error desconocido.')
-    }
-  }
+  }, '*')
 })
 
-// Listen for messages from the plugin code
+// Listen for messages from plugin code
 window.addEventListener('message', (event) => {
   const msg = event.data.pluginMessage
   if (!msg) return
 
+  if (msg.type === 'html-received') {
+    setProgress(40, 'Procesando HTML...')
+
+    try {
+      const { html, url, selector, depth } = msg
+
+      const parser = new DOMParser()
+      const doc = parser.parseFromString(html, 'text/html')
+
+      const rootEl = doc.querySelector(selector) as HTMLElement
+      if (!rootEl) {
+        throw new Error(`No se encontró el selector "${selector}" en la página.`)
+      }
+
+      setProgress(65, 'Extrayendo estructura y estilos...')
+      const tree = parseElement(rootEl, depth, 0)
+      const pageTitle = doc.title || new URL(url).pathname
+
+      setProgress(80, 'Enviando a Figma...')
+
+      parent.postMessage({
+        pluginMessage: {
+          type: 'import-tree',
+          tree,
+          pageTitle,
+          url,
+        }
+      }, '*')
+    } catch (err: any) {
+      importBtn.disabled = false
+      progress.classList.remove('visible')
+      showError(err.message || 'Error al procesar el HTML.')
+    }
+  }
+
+  if (msg.type === 'progress') {
+    setProgress(msg.pct, msg.text)
+  }
+
   if (msg.type === 'done') {
     importBtn.disabled = false
     setProgress(100, 'Completado')
-    showSuccess(`✓ Importado correctamente: ${msg.frameCount} frames creados en Figma.`)
+    showSuccess(`✓ Importado: ${msg.frameCount} elementos creados en Figma.`)
   }
 
   if (msg.type === 'error') {
@@ -121,7 +119,7 @@ window.addEventListener('message', (event) => {
   }
 })
 
-// --- DOM Parser ---
+// ─── DOM Parser ───────────────────────────────────────────────────────────────
 
 interface NodeTree {
   tag: string
@@ -134,14 +132,12 @@ interface NodeTree {
 }
 
 function parseElement(el: HTMLElement, maxDepth: number, currentDepth: number): NodeTree {
-  const styles = extractStyles(el)
   const children: NodeTree[] = []
 
   if (currentDepth < maxDepth) {
     for (const child of Array.from(el.children)) {
       const htmlChild = child as HTMLElement
-      const display = getComputedOrInlineStyle(htmlChild, 'display')
-      if (display === 'none') continue
+      if (htmlChild.style.display === 'none') continue
       children.push(parseElement(htmlChild, maxDepth, currentDepth + 1))
     }
   }
@@ -153,38 +149,25 @@ function parseElement(el: HTMLElement, maxDepth: number, currentDepth: number): 
     text: el.childNodes.length === 1 && el.firstChild?.nodeType === Node.TEXT_NODE
       ? (el.firstChild as Text).textContent?.trim() || ''
       : '',
-    styles,
+    styles: extractStyles(el),
     children,
-    rect: {
-      width: el.offsetWidth || 0,
-      height: el.offsetHeight || 0,
-    }
+    rect: { width: el.offsetWidth || 0, height: el.offsetHeight || 0 },
   }
 }
 
 function extractStyles(el: HTMLElement): Record<string, string> {
-  const relevant = [
+  const props = [
     'color', 'background-color', 'background',
     'font-size', 'font-weight', 'font-family', 'line-height',
     'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
-    'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
     'border-radius', 'border', 'border-color', 'border-width',
     'display', 'flex-direction', 'align-items', 'justify-content', 'gap',
-    'width', 'height', 'max-width', 'min-height',
-    'opacity', 'text-align', 'letter-spacing', 'text-decoration',
+    'width', 'height', 'max-width', 'opacity', 'text-align', 'letter-spacing',
   ]
-
   const result: Record<string, string> = {}
-
-  // Inline styles take priority
-  for (const prop of relevant) {
-    const inline = el.style.getPropertyValue(prop)
-    if (inline) result[prop] = inline
+  for (const prop of props) {
+    const val = el.style.getPropertyValue(prop)
+    if (val) result[prop] = val
   }
-
   return result
-}
-
-function getComputedOrInlineStyle(el: HTMLElement, prop: string): string {
-  return el.style.getPropertyValue(prop) || ''
 }

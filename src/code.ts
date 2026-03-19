@@ -4,7 +4,32 @@
 figma.showUI(__html__, { width: 300, height: 480, title: 'WARO URL to Figma' })
 
 figma.ui.onmessage = async (msg) => {
-  if (msg.type === 'import-url') {
+  // Step 1: UI requests a URL fetch — use figma.fetch (no CORS)
+  if (msg.type === 'fetch-url') {
+    try {
+      const res = await figma.fetch(msg.url)
+      if (!res.ok) {
+        figma.ui.postMessage({ type: 'error', message: `Error HTTP ${res.status}: ${res.statusText}` })
+        return
+      }
+      const html = await res.text()
+      figma.ui.postMessage({
+        type: 'html-received',
+        html,
+        url: msg.url,
+        selector: msg.selector,
+        depth: msg.depth,
+      })
+    } catch (err: any) {
+      figma.ui.postMessage({
+        type: 'error',
+        message: `No se pudo conectar con "${msg.url}". Verifica que la app esté corriendo.`,
+      })
+    }
+  }
+
+  // Step 2: UI parsed the HTML and sends back the tree
+  if (msg.type === 'import-tree') {
     try {
       await importTree(msg.tree, msg.pageTitle, msg.url)
     } catch (err: any) {
