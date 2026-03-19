@@ -1,33 +1,37 @@
 // UI Script — runs in the browser iframe inside Figma
 
-const urlInput = document.getElementById('url-input') as HTMLInputElement
-const selectorInput = document.getElementById('selector-input') as HTMLInputElement
-const depthSelect = document.getElementById('depth-select') as HTMLSelectElement
-const importBtn = document.getElementById('import-btn') as HTMLButtonElement
-const progress = document.getElementById('progress') as HTMLDivElement
+const progress   = document.getElementById('progress') as HTMLDivElement
 const progressFill = document.getElementById('progress-fill') as HTMLDivElement
 const progressText = document.getElementById('progress-text') as HTMLDivElement
-const errorBox = document.getElementById('error-box') as HTMLDivElement
+const errorBox   = document.getElementById('error-box') as HTMLDivElement
 const successBox = document.getElementById('success-box') as HTMLDivElement
+
+// Tabs
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'))
+    tab.classList.add('active')
+    const panelId = `panel-${(tab as HTMLElement).dataset.tab}`
+    document.getElementById(panelId)?.classList.add('active')
+  })
+})
 
 function setProgress(pct: number, text: string) {
   progress.classList.add('visible')
   progressFill.style.width = `${pct}%`
   progressText.textContent = text
 }
-
 function showError(msg: string) {
   errorBox.textContent = msg
   errorBox.classList.add('visible')
   successBox.classList.remove('visible')
 }
-
 function showSuccess(msg: string) {
   successBox.textContent = msg
   successBox.classList.add('visible')
   errorBox.classList.remove('visible')
 }
-
 function reset() {
   errorBox.classList.remove('visible')
   successBox.classList.remove('visible')
@@ -35,113 +39,107 @@ function reset() {
   progressFill.style.width = '0%'
 }
 
-importBtn.addEventListener('click', async () => {
-  const url = urlInput.value.trim()
-  if (!url) { showError('Ingresa una URL válida.'); return }
+// ─── Import from .vue file ────────────────────────────────────────────────────
 
-  const fullUrl = url.startsWith('http') ? url : `http://${url}`
-  const selector = selectorInput.value.trim() || 'body'
-  const depth = parseInt(depthSelect.value)
+const fileInput    = document.getElementById('file-input') as HTMLInputElement
+const fileDepth    = document.getElementById('file-depth') as HTMLSelectElement
+const importFileBtn = document.getElementById('import-file-btn') as HTMLButtonElement
+
+importFileBtn.addEventListener('click', async () => {
+  const filePath = fileInput.value.trim()
+  if (!filePath) { showError('Ingresa la ruta del archivo .vue'); return }
 
   reset()
-  importBtn.disabled = true
-  setProgress(10, 'Renderizando página...')
-
-  // Use snapshot server to get fully rendered HTML (handles SPA/Vue/Nuxt)
-  const snapshotUrl = `http://localhost:8889/snapshot?url=${encodeURIComponent(fullUrl)}`
+  importFileBtn.disabled = true
+  setProgress(15, 'Leyendo archivo .vue...')
 
   try {
-    const res = await fetch(snapshotUrl, { mode: 'cors' })
-    if (!res.ok) throw new Error(`Error HTTP ${res.status}: ${res.statusText}`)
+    const res = await fetch('http://localhost:8889/parse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filePath, depth: parseInt(fileDepth.value) }),
+    })
 
-    setProgress(35, 'Procesando HTML...')
-    const html = await res.text()
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }))
+      throw new Error(err.error || `Error ${res.status}`)
+    }
 
-    setProgress(55, 'Extrayendo estructura...')
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(html, 'text/html')
+    setProgress(60, 'Procesando árbol de componentes...')
+    const { tree, title } = await res.json()
 
-    const rootEl = doc.querySelector(selector) as HTMLElement
-    if (!rootEl) throw new Error(`No se encontró el selector "${selector}" en la página.`)
-
-    const tree = parseElement(rootEl, depth, 0)
-    const pageTitle = doc.title || new URL(fullUrl).pathname
+    if (!tree) throw new Error('No se pudo parsear el archivo.')
 
     setProgress(80, 'Enviando a Figma...')
-
-    parent.postMessage({
-      pluginMessage: { type: 'import-tree', tree, pageTitle, url: fullUrl }
-    }, '*')
+    parent.postMessage({ pluginMessage: { type: 'import-tree', tree, pageTitle: title, url: filePath } }, '*')
 
   } catch (err: any) {
-    importBtn.disabled = false
+    importFileBtn.disabled = false
     progress.classList.remove('visible')
-    if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
-      showError('No se pudo conectar con el snapshot server. Corre: npm run snapshot en la carpeta del plugin.')
+    if (err.message?.includes('Failed to fetch')) {
+      showError('No se puede conectar al snapshot server.\nCorre: npm run snapshot')
     } else {
       showError(err.message || 'Error desconocido.')
     }
   }
 })
 
-// Messages from plugin code
+// ─── Import from URL ──────────────────────────────────────────────────────────
+
+const urlInput     = document.getElementById('url-input') as HTMLInputElement
+const selectorInput = document.getElementById('selector-input') as HTMLInputElement
+const importUrlBtn = document.getElementById('import-url-btn') as HTMLButtonElement
+
+importUrlBtn.addEventListener('click', async () => {
+  const url = urlInput.value.trim()
+  if (!url) { showError('Ingresa una URL válida.'); return }
+
+  const fullUrl = url.startsWith('http') ? url : `http://${url}`
+  const selector = selectorInput.value.trim() || 'body'
+
+  reset()
+  importUrlBtn.disabled = true
+  setProgress(10, 'Renderizando página...')
+
+  const snapshotUrl = `http://localhost:8889/snapshot?url=${encodeURIComponent(fullUrl)}&selector=${encodeURIComponent(selector)}`
+
+  try {
+    const res = await fetch(snapshotUrl)
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }))
+      throw new Error(err.error || `Error ${res.status}`)
+    }
+
+    setProgress(70, 'Procesando estructura...')
+    const { tree, title } = await res.json()
+    if (!tree) throw new Error('No se encontró contenido.')
+
+    setProgress(85, 'Enviando a Figma...')
+    parent.postMessage({ pluginMessage: { type: 'import-tree', tree, pageTitle: title || new URL(fullUrl).pathname, url: fullUrl } }, '*')
+
+  } catch (err: any) {
+    importUrlBtn.disabled = false
+    progress.classList.remove('visible')
+    showError(err.message || 'Error desconocido.')
+  }
+})
+
+// ─── Messages from plugin code ────────────────────────────────────────────────
+
 window.addEventListener('message', (event) => {
   const msg = event.data.pluginMessage
   if (!msg) return
+
+  const allBtns = [importFileBtn, importUrlBtn]
+
   if (msg.type === 'done') {
-    importBtn.disabled = false
+    allBtns.forEach(b => b.disabled = false)
     setProgress(100, 'Completado')
     showSuccess(`✓ Importado: ${msg.frameCount} elementos creados en Figma.`)
   }
   if (msg.type === 'error') {
-    importBtn.disabled = false
+    allBtns.forEach(b => b.disabled = false)
     progress.classList.remove('visible')
     showError(msg.message)
   }
 })
-
-// ─── DOM Parser ───────────────────────────────────────────────────────────────
-
-interface NodeTree {
-  tag: string; id: string; classes: string[]; text: string
-  styles: Record<string, string>; children: NodeTree[]
-  rect: { width: number; height: number }
-}
-
-function parseElement(el: HTMLElement, maxDepth: number, currentDepth: number): NodeTree {
-  const children: NodeTree[] = []
-  if (currentDepth < maxDepth) {
-    for (const child of Array.from(el.children)) {
-      const c = child as HTMLElement
-      if (c.style.display === 'none') continue
-      children.push(parseElement(c, maxDepth, currentDepth + 1))
-    }
-  }
-  return {
-    tag: el.tagName.toLowerCase(),
-    id: el.id || '',
-    classes: Array.from(el.classList),
-    text: el.childNodes.length === 1 && el.firstChild?.nodeType === Node.TEXT_NODE
-      ? (el.firstChild as Text).textContent?.trim() || '' : '',
-    styles: extractStyles(el),
-    children,
-    rect: { width: el.offsetWidth || 0, height: el.offsetHeight || 0 },
-  }
-}
-
-function extractStyles(el: HTMLElement): Record<string, string> {
-  const props = [
-    'color', 'background-color', 'background',
-    'font-size', 'font-weight', 'font-family', 'line-height',
-    'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
-    'border-radius', 'border', 'border-color', 'border-width',
-    'display', 'flex-direction', 'align-items', 'justify-content', 'gap',
-    'width', 'height', 'opacity', 'text-align', 'letter-spacing',
-  ]
-  const result: Record<string, string> = {}
-  for (const prop of props) {
-    const val = el.style.getPropertyValue(prop)
-    if (val) result[prop] = val
-  }
-  return result
-}

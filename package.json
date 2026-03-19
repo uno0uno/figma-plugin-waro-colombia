@@ -14,8 +14,10 @@
     "typescript": "^5.4.0"
   },
   "dependencies": {
+    "@vue/compiler-sfc": "^3.5.30",
     "cors": "^2.8.6",
     "express": "^5.2.1",
-    "puppeteer-core": "^24.39.1"
+    "puppeteer-core": "^24.39.1",
+    "tailwindcss": "^3.4.19"
   }
 }

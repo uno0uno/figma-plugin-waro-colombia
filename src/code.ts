@@ -268,8 +268,8 @@ function parseColor(val: string | undefined): RGB | null {
 // ─── Dimension helpers ────────────────────────────────────────────────────────
 
 function getDimensions(tree: NodeTree): { w: number; h: number } {
-  const w = parsePx(tree.styles['width']) ?? tree.rect.width ?? 100
-  const h = parsePx(tree.styles['height']) ?? tree.rect.height ?? 40
+  const w = tree.rect.width || parsePx(tree.styles['width']) || 100
+  const h = tree.rect.height || parsePx(tree.styles['height']) || 40
   return { w, h }
 }
 
