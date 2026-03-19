@@ -5,11 +5,17 @@
   "scripts": {
     "build": "node build.js",
     "watch": "node build.js --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "snapshot": "node snapshot-server.js"
   },
   "devDependencies": {
     "@figma/plugin-typings": "^1.96.0",
     "esbuild": "^0.20.0",
     "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "puppeteer-core": "^24.39.1"
   }
 }

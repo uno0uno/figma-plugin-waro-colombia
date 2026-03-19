@@ -45,10 +45,13 @@ importBtn.addEventListener('click', async () => {
 
   reset()
   importBtn.disabled = true
-  setProgress(10, 'Conectando con la URL...')
+  setProgress(10, 'Renderizando página...')
+
+  // Use snapshot server to get fully rendered HTML (handles SPA/Vue/Nuxt)
+  const snapshotUrl = `http://localhost:8889/snapshot?url=${encodeURIComponent(fullUrl)}`
 
   try {
-    const res = await fetch(fullUrl, { mode: 'cors' })
+    const res = await fetch(snapshotUrl, { mode: 'cors' })
     if (!res.ok) throw new Error(`Error HTTP ${res.status}: ${res.statusText}`)
 
     setProgress(35, 'Procesando HTML...')
@@ -74,7 +77,7 @@ importBtn.addEventListener('click', async () => {
     importBtn.disabled = false
     progress.classList.remove('visible')
     if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
-      showError('No se pudo conectar. Asegúrate de que la app esté corriendo y reinicia el servidor Nuxt para aplicar los headers CORS.')
+      showError('No se pudo conectar con el snapshot server. Corre: npm run snapshot en la carpeta del plugin.')
     } else {
       showError(err.message || 'Error desconocido.')
     }
